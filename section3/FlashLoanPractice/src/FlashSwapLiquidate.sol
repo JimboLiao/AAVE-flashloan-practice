@@ -6,7 +6,7 @@ import {IUniswapV2Factory} from "v2-core/interfaces/IUniswapV2Factory.sol";
 import {IUniswapV2Pair} from "v2-core/interfaces/IUniswapV2Pair.sol";
 import {IUniswapV2Router02} from "v2-periphery/interfaces/IUniswapV2Router02.sol";
 import {CErc20} from "compound-protocol/contracts/CErc20.sol";
-
+import "forge-std/console.sol";
 
 contract FlashSwapLiquidate is IUniswapV2Callee {
   IERC20 public USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
@@ -22,9 +22,30 @@ contract FlashSwapLiquidate is IUniswapV2Callee {
     require(amount0 > 0 || amount1 > 0, "amount0 or amount1 must be greater than 0");
 
     // TODO
+    (address borrower, uint256 amountOut) = abi.decode(data, (address, uint256));
+    USDC.approve(address(cUSDC), amountOut);
+    cUSDC.liquidateBorrow(borrower, amountOut, cDAI);
+    cDAI.redeem(cDAI.balanceOf(address(this)));
+    address pool = factory.getPair(address(DAI), address(USDC));
+    address[] memory path = new address[](2);
+    path[0] = address(DAI);
+    path[1] = address(USDC);
+    uint256 repayUniswapAmount = router.getAmountsIn(amountOut, path)[0];
+    console.log(repayUniswapAmount);
+    DAI.transfer(pool, repayUniswapAmount);
   }
 
   function liquidate(address borrower, uint256 amountOut) external {
     // TODO
+    // get pool
+    address pool = factory.getPair(address(DAI), address(USDC));
+    bytes memory data = abi.encode(borrower, amountOut);
+    IUniswapV2Pair(pool).swap(
+      0,
+      amountOut,
+      address(this),
+      data
+    );
+    
   }
 }
